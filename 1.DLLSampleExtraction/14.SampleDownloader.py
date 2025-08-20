@@ -2,6 +2,7 @@
 import os
 import requests
 import pyzipper
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 API_URL = "https://mb-api.abuse.ch/api/v1/"
 API_KEY = "2dd3cdd1b4c736d3eafe69a54faf90c442064be1b22395d7"
@@ -16,17 +17,17 @@ headers = {"Auth-Key": API_KEY}
 with open("result.txt", "r") as f:
     hashes = [line.strip() for line in f if line.strip()]
 
-for sha256 in hashes:
+
+def download_and_extract(sha256: str):
     file_path = os.path.join(save_dir, f"{sha256}.zip")
     data = {"query": "get_file", "sha256_hash": sha256}
 
     print(f"\n[*] Downloading sample for hash: {sha256}")
-
     try:
-        response = requests.post(API_URL, headers=headers, data=data)
+        response = requests.post(API_URL, headers=headers, data=data, timeout=60)
 
         if response.status_code == 200:
-            with open(file_path, 'wb') as file:
+            with open(file_path, "wb") as file:
                 file.write(response.content)
 
             try:
@@ -46,3 +47,11 @@ for sha256 in hashes:
 
     except Exception as e:
         print(f"[!] Exception for {sha256}: {e}")
+
+
+# Use multithreading
+max_workers = 5  
+with ThreadPoolExecutor(max_workers=max_workers) as executor:
+    futures = [executor.submit(download_and_extract, sha256) for sha256 in hashes]
+    for future in as_completed(futures):
+        future.result()  
